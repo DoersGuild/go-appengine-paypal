@@ -51,7 +51,7 @@ type PayPalError struct {
 func (e *PayPalError) Error() string {
 	var message string
 	if len(e.ErrorCode) != 0 && len(e.ShortMessage) != 0 {
-		message = "PayPal Error " + e.ErrorCode + ": " + e.ShortMessage
+		message = "PayPal Error " + e.ErrorCode + ": " + e.ShortMessage + " - " + e.LongMessage
 	} else if len(e.Ack) != 0 {
 		message = e.Ack
 	} else {
