@@ -1,33 +1,33 @@
 package paypal
 
 import (
-	"net/http"
-	"net/url"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"strings"
 )
 
 const (
 	NVP_SANDBOX_URL         = "https://api-3t.sandbox.paypal.com/nvp"
 	NVP_PRODUCTION_URL      = "https://api-3t.paypal.com/nvp"
-  CHECKOUT_SANDBOX_URL    = "https://www.sandbox.paypal.com/cgi-bin/webscr"
-  CHECKOUT_PRODUCTION_URL = "https://www.paypal.com/cgi-bin/webscr"
+	CHECKOUT_SANDBOX_URL    = "https://www.sandbox.paypal.com/cgi-bin/webscr"
+	CHECKOUT_PRODUCTION_URL = "https://www.paypal.com/cgi-bin/webscr"
 	NVP_VERSION             = "84"
 )
 
 type PayPalClient struct {
-	username      string
-	password      string
-	signature     string
-	usesSandbox   bool
-	client        *http.Client
+	username    string
+	password    string
+	signature   string
+	usesSandbox bool
+	client      *http.Client
 }
 
 type PayPalDigitalGood struct {
-	Name      string
-	Amount    float64
-	Quantity  int16
+	Name     string
+	Amount   float64
+	Quantity int16
 }
 
 type PayPalResponse struct {
@@ -37,46 +37,46 @@ type PayPalResponse struct {
 	Version       string
 	Build         string
 	Values        url.Values
-  usedSandbox   bool
+	usedSandbox   bool
 }
 
 type PayPalError struct {
-	Ack           string
-	ErrorCode     string
-	ShortMessage  string
-	LongMessage   string
-	SeverityCode  string
+	Ack          string
+	ErrorCode    string
+	ShortMessage string
+	LongMessage  string
+	SeverityCode string
 }
 
 func (e *PayPalError) Error() string {
 	var message string
 	if len(e.ErrorCode) != 0 && len(e.ShortMessage) != 0 {
-		message = "PayPal Error " + e.ErrorCode + ": " + e.ShortMessage
+		message = "PayPal Error " + e.ErrorCode + ": " + e.ShortMessage + " - " + e.LongMessage
 	} else if len(e.Ack) != 0 {
 		message = e.Ack
 	} else {
 		message = "PayPal is undergoing maintenance.\nPlease try again later."
 	}
 
-  return message
+	return message
 }
 
 func (r *PayPalResponse) CheckoutUrl() string {
-  query := url.Values{}
-  query.Set("cmd", "_express-checkout")
-  query.Add("token", r.Values["TOKEN"][0])
-  checkoutUrl := CHECKOUT_PRODUCTION_URL
-  if r.usedSandbox {
-    checkoutUrl = CHECKOUT_SANDBOX_URL
-  }
-  return fmt.Sprintf("%s?%s", checkoutUrl, query.Encode())
+	query := url.Values{}
+	query.Set("cmd", "_express-checkout")
+	query.Add("token", r.Values["TOKEN"][0])
+	checkoutUrl := CHECKOUT_PRODUCTION_URL
+	if r.usedSandbox {
+		checkoutUrl = CHECKOUT_SANDBOX_URL
+	}
+	return fmt.Sprintf("%s?%s", checkoutUrl, query.Encode())
 }
 
 func SumPayPalDigitalGoodAmounts(goods *[]PayPalDigitalGood) (sum float64) {
-  for _, dg := range *goods {
-    sum += dg.Amount * float64(dg.Quantity)
-  }
-  return
+	for _, dg := range *goods {
+		sum += dg.Amount * float64(dg.Quantity)
+	}
+	return
 }
 
 func NewDefaultClient(username, password, signature string, usesSandbox bool) *PayPalClient {
@@ -88,22 +88,26 @@ func NewClient(username, password, signature string, usesSandbox bool, client *h
 }
 
 func (pClient *PayPalClient) PerformRequest(values url.Values) (*PayPalResponse, error) {
-	values.Add("USER", pClient.username);
-	values.Add("PWD", pClient.password);
-	values.Add("SIGNATURE", pClient.signature);
-	values.Add("VERSION", NVP_VERSION);
+	values.Add("USER", pClient.username)
+	values.Add("PWD", pClient.password)
+	values.Add("SIGNATURE", pClient.signature)
+	values.Add("VERSION", NVP_VERSION)
 
 	endpoint := NVP_PRODUCTION_URL
 	if pClient.usesSandbox {
 		endpoint = NVP_SANDBOX_URL
 	}
-  
+
 	formResponse, err := pClient.client.PostForm(endpoint, values)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer formResponse.Body.Close()
 
 	body, err := ioutil.ReadAll(formResponse.Body)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	responseValues, err := url.ParseQuery(string(body))
 	response := &PayPalResponse{usedSandbox: pClient.usesSandbox}
@@ -131,17 +135,17 @@ func (pClient *PayPalClient) PerformRequest(values url.Values) (*PayPalResponse,
 	return response, err
 }
 
-func (pClient *PayPalClient) SetExpressCheckoutDigitalGoods(paymentAmount float64, currencyCode string, returnURL, cancelURL string, goods[]PayPalDigitalGood) (*PayPalResponse, error) {
+func (pClient *PayPalClient) SetExpressCheckoutDigitalGoods(paymentAmount float64, currencyCode string, returnURL, cancelURL string, goods []PayPalDigitalGood) (*PayPalResponse, error) {
 	values := url.Values{}
 	values.Set("METHOD", "SetExpressCheckout")
 	values.Add("PAYMENTREQUEST_0_AMT", fmt.Sprintf("%.2f", paymentAmount))
-	values.Add("PAYMENTREQUEST_0_PAYMENTACTION", "Sale");
-	values.Add("PAYMENTREQUEST_0_CURRENCYCODE", currencyCode);
-	values.Add("RETURNURL", returnURL);
-	values.Add("CANCELURL", cancelURL);
-	values.Add("REQCONFIRMSHIPPING", "0");
-	values.Add("NOSHIPPING", "1");
-	values.Add("SOLUTIONTYPE", "Sole");
+	values.Add("PAYMENTREQUEST_0_PAYMENTACTION", "Sale")
+	values.Add("PAYMENTREQUEST_0_CURRENCYCODE", currencyCode)
+	values.Add("RETURNURL", returnURL)
+	values.Add("CANCELURL", cancelURL)
+	values.Add("REQCONFIRMSHIPPING", "0")
+	values.Add("NOSHIPPING", "1")
+	values.Add("SOLUTIONTYPE", "Sole")
 
 	for i := 0; i < len(goods); i++ {
 		good := goods[i]
@@ -157,7 +161,7 @@ func (pClient *PayPalClient) SetExpressCheckoutDigitalGoods(paymentAmount float6
 
 // Convenience function for Sale (Charge)
 func (pClient *PayPalClient) DoExpressCheckoutSale(token, payerId, currencyCode string, finalPaymentAmount float64) (*PayPalResponse, error) {
-  return pClient.DoExpressCheckoutPayment(token, payerId, "Sale", currencyCode, finalPaymentAmount)
+	return pClient.DoExpressCheckoutPayment(token, payerId, "Sale", currencyCode, finalPaymentAmount)
 }
 
 // paymentType can be "Sale" or "Authorization" or "Order" (ship later)
@@ -167,14 +171,14 @@ func (pClient *PayPalClient) DoExpressCheckoutPayment(token, payerId, paymentTyp
 	values.Add("TOKEN", token)
 	values.Add("PAYERID", payerId)
 	values.Add("PAYMENTREQUEST_0_PAYMENTACTION", paymentType)
-	values.Add("PAYMENTREQUEST_0_CURRENCYCODE", currencyCode);
+	values.Add("PAYMENTREQUEST_0_CURRENCYCODE", currencyCode)
 	values.Add("PAYMENTREQUEST_0_AMT", fmt.Sprintf("%.2f", finalPaymentAmount))
 
 	return pClient.PerformRequest(values)
 }
 
 func (pClient *PayPalClient) GetExpressCheckoutDetails(token string) (*PayPalResponse, error) {
-  values := url.Values{}
+	values := url.Values{}
 	values.Add("TOKEN", token)
 	values.Set("METHOD", "GetExpressCheckoutDetails")
 	return pClient.PerformRequest(values)
